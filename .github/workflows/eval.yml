@@ -1,0 +1,52 @@
+name: RAG Faithfulness Evaluation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            langchain \
+            langchain-groq \
+            langchain-huggingface \
+            langchain-chroma \
+            langchain-cohere \
+            langchain-community \
+            sentence-transformers \
+            rank-bm25 \
+            ragas \
+            datasets \
+            pypdf \
+            tiktoken \
+            chromadb
+
+      - name: Build vectorstore
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python embeddings.py
+
+      - name: Run RAGAS evaluation
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python evaluation/ragas_eval.py

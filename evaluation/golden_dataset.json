@@ -1,0 +1,52 @@
+[
+  {
+    "question": "What did the Fed decide on interest rates in January 2026?",
+    "ground_truth": "The Fed decided to maintain the target range for the federal funds rate at 3-1/2 to 3-3/4 percent.",
+    "institution": "FED"
+  },
+  {
+    "question": "What is the interest rate paid on reserve balances effective January 29 2026?",
+    "ground_truth": "The interest rate paid on reserve balances is 3.65 percent effective January 29 2026.",
+    "institution": "FED"
+  },
+  {
+    "question": "What percentage of 2000 rupee banknotes have been returned as of March 31 2026?",
+    "ground_truth": "98.45% of the 2000 rupee banknotes in circulation as on May 19 2023 have been returned.",
+    "institution": "RBI"
+  },
+  {
+    "question": "What was the total value of 2000 rupee banknotes in circulation when withdrawal was announced?",
+    "ground_truth": "The total value was 3.56 lakh crore rupees at the close of business on May 19 2023.",
+    "institution": "RBI"
+  },
+  {
+    "question": "What is the total value of 2000 rupee banknotes still in circulation as of March 31 2026?",
+    "ground_truth": "The total value of 2000 rupee banknotes in circulation declined to 5501 crore rupees as of March 31 2026.",
+    "institution": "RBI"
+  },
+  {
+    "question": "Are 2000 rupee banknotes still legal tender?",
+    "ground_truth": "Yes the 2000 rupee banknotes continue to be legal tender.",
+    "institution": "RBI"
+  },
+  {
+    "question": "What was Goldman Sachs net revenues for the latest reported period?",
+    "ground_truth": "Goldman Sachs reported net revenues of 151 million 2129 million and 2058 million for the reported periods.",
+    "institution": "GS"
+  },
+  {
+    "question": "Who voted for the monetary policy action at the January 2026 Fed meeting?",
+    "ground_truth": "Jerome H. Powell Chair John C. Williams Vice Chair Michael S. Barr Michelle W. Bowman Lisa D. Cook Beth M. Hammack Philip N. Jefferson and Neel Kashkari voted for the action.",
+    "institution": "FED"
+  },
+  {
+    "question": "What is the primary credit rate approved by the Board of Governors in January 2026?",
+    "ground_truth": "The Board of Governors voted unanimously to approve the establishment of the primary credit rate at 3.75 percent.",
+    "institution": "FED"
+  },
+  {
+    "question": "Where can 2000 rupee banknotes be exchanged after October 2023?",
+    "ground_truth": "After October 2023 the facility for exchange of 2000 rupee banknotes is available at the 19 Issue Offices of the Reserve Bank of India.",
+    "institution": "RBI"
+  }
+]
