@@ -1,9 +1,75 @@
 import os
+import asyncio
+import hashlib
+from pathlib import Path
+from collections import OrderedDict
+from typing import Any, Dict, List, Optional
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 from hybrid_retriever import load_vectorstore, build_bm25_index, build_hybrid_retriever
+
+try:
+    from langsmith import traceable
+except Exception:  # pragma: no cover
+    def traceable(*args, **kwargs):
+        def _decorator(func):
+            return func
+        return _decorator
+
+_ANSWER_CACHE: "OrderedDict[str, str]" = OrderedDict()
+_CACHE_MAX_ITEMS = 256
+
+
+def _get_env_var(name: str) -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, raw = line.split("=", 1)
+            if key.strip() == name:
+                return raw.strip().strip('"').strip("'")
+
+    raise RuntimeError(
+        f"Missing required environment variable: {name}. "
+        f"Set it in your shell or add it to .env in the project root."
+    )
+
+
+def _get_optional_env_var(name: str) -> Optional[str]:
+    value = os.getenv(name)
+    if value:
+        return value
+
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, raw = line.split("=", 1)
+            if key.strip() == name:
+                return raw.strip().strip('"').strip("'")
+    return None
+
+
+def _configure_langsmith_for_qa() -> None:
+    """Enable LangSmith tracing for QA when a LangSmith key is available."""
+    ls_key = _get_optional_env_var("LANGSMITH_API_KEY") or _get_optional_env_var("LANGCHAIN_API_KEY")
+    if not ls_key:
+        return
+
+    os.environ["LANGSMITH_API_KEY"] = ls_key
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+    os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+    os.environ.setdefault("LANGSMITH_PROJECT", _get_optional_env_var("LANGSMITH_PROJECT") or "FinRAG-QA")
 
 # ── Prompt ────────────────────────────────────────────────────────────────────
 PROMPT_TEMPLATE = """You are a financial analyst assistant. Answer the question
@@ -37,8 +103,110 @@ def format_context(docs):
     return "\n\n---\n\n".join(parts)
 
 
+@traceable
+def format_prompt(question: str, context: str) -> str:
+    return PROMPT_TEMPLATE.format(context=context, question=question)
+
+
+@traceable(run_type="llm")
+async def invoke_llm_async(llm: ChatGroq, prompt_text: str) -> Any:
+    try:
+        return await llm.ainvoke(prompt_text)
+    except Exception:
+        return await asyncio.to_thread(llm.invoke, prompt_text)
+
+
+@traceable
+def parse_output(response: Any) -> str:
+    return response.content if hasattr(response, "content") else str(response)
+
+
+@traceable
+async def run_pipeline(question: str, docs: List[Any], llm: ChatGroq) -> str:
+    context = format_context(docs)
+    prompt_text = format_prompt(question, context)
+    response = await invoke_llm_async(llm, prompt_text)
+    return parse_output(response)
+
+
+def _cache_get(key: str) -> Optional[str]:
+    value = _ANSWER_CACHE.get(key)
+    if value is not None:
+        _ANSWER_CACHE.move_to_end(key)
+    return value
+
+
+def _cache_set(key: str, value: str) -> None:
+    _ANSWER_CACHE[key] = value
+    _ANSWER_CACHE.move_to_end(key)
+    while len(_ANSWER_CACHE) > _CACHE_MAX_ITEMS:
+        _ANSWER_CACHE.popitem(last=False)
+
+
+def _hash_query_context(question: str, context: str) -> str:
+    payload = f"{question}\n---\n{context}".encode("utf-8", errors="ignore")
+    return hashlib.sha256(payload).hexdigest()
+
+
+async def async_retrieve_documents(
+    question: str,
+    institution_filter: str = None,
+    vectorstore=None,
+    bm25_index=None,
+    k: int = 6,
+) -> List[Any]:
+    if vectorstore is None:
+        vectorstore = load_vectorstore()
+    if bm25_index is None:
+        bm25_index = build_bm25_index()
+
+    retriever = build_hybrid_retriever(
+        vectorstore=vectorstore,
+        bm25_index=bm25_index,
+        institution_filter=institution_filter,
+        k=k,
+    )
+    return await asyncio.to_thread(retriever.invoke, question)
+
+
+async def async_answer_with_cache(
+    question: str,
+    institution_filter: str = None,
+    vectorstore=None,
+    bm25_index=None,
+    k: int = 6,
+) -> Dict[str, Any]:
+    _configure_langsmith_for_qa()
+
+    docs = await async_retrieve_documents(
+        question=question,
+        institution_filter=institution_filter,
+        vectorstore=vectorstore,
+        bm25_index=bm25_index,
+        k=k,
+    )
+
+    context = format_context(docs)
+    cache_key = _hash_query_context(question, context)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return {"answer": cached, "docs": docs, "cache_hit": True}
+
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0,
+        api_key=_get_env_var("GROQ_API_KEY"),
+    )
+
+    answer = await run_pipeline(question=question, docs=docs, llm=llm)
+    _cache_set(cache_key, answer)
+    return {"answer": answer, "docs": docs, "cache_hit": False}
+
+
 def build_qa_chain(institution_filter: str = None, vectorstore=None,
                    bm25_index=None, k: int = 6):
+    _configure_langsmith_for_qa()
+
     if vectorstore is None:
         vectorstore = load_vectorstore()
     if bm25_index is None:
@@ -54,7 +222,7 @@ def build_qa_chain(institution_filter: str = None, vectorstore=None,
     llm = ChatGroq(
         model="llama-3.3-70b-versatile",
         temperature=0,
-        api_key=os.environ["GROQ_API_KEY"]
+        api_key=_get_env_var("GROQ_API_KEY")
     )
 
     # ✅ Use RunnableLambda since HybridRetriever is not a LangChain Runnable

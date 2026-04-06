@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_cohere import CohereRerank
@@ -10,6 +11,28 @@ from typing import List, Optional
 
 CHROMA_DIR = "chroma_db"
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+def _get_env_var(name: str) -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+
+    # Fallback: read from local .env when variables are not exported in shell.
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, raw = line.split("=", 1)
+            if key.strip() == name:
+                return raw.strip().strip('"').strip("'")
+
+    raise RuntimeError(
+        f"Missing required environment variable: {name}. "
+        f"Set it in your shell or add it to .env in the project root."
+    )
 
 
 # ── BM25 Index ────────────────────────────────────────────────────────────────
@@ -51,7 +74,7 @@ class HybridRetriever:
 
         # ✅ Cohere reranker — replaces HuggingFace cross-encoder
         self.reranker = CohereRerank(
-            cohere_api_key=os.environ["COHERE_API_KEY"],
+            cohere_api_key=_get_env_var("COHERE_API_KEY"),
             model="rerank-english-v3.0",
             top_n=k
         )
