@@ -39,6 +39,7 @@ Core outcomes:
 - Neo4j Aura integration for graph storage
 - Source-scoped graph writes
 - Reload graph by source label
+- Neo4j is used primarily to persist and visualize the user's own uploaded document graph
 
 ### 4) Evaluation and CI
 - Golden dataset in `evaluation/golden_dataset.json`
@@ -114,10 +115,33 @@ User Question
 User Upload (.pdf/.txt)
   -> Text Extraction
   -> LLM/Heuristic Triple Extraction
+  -> Neo4j (primary store for uploaded-content graph visualization)
   -> Graph Sanitization + Main Node Detection
   -> Neo4j Persist/Load
   -> Pyvis Interactive Visualization
   -> Node-linked Retrieval + QA
+```
+
+## Methodology Diagram
+
+```mermaid
+flowchart TD
+    A[User Input] --> B{Mode}
+    B -->|Ask Question| C[Hybrid Retrieval\nBM25 + Chroma]
+    C --> D[Cohere Rerank]
+    D --> E[Context Formatter]
+    E --> F[Groq LLM Answer]
+    F --> G[Citations + Cache\nquery+context hash]
+
+    B -->|Upload PDF/TXT| H[Document Text Extraction]
+    H --> I[Entity/Relation Extraction\nLLM + Heuristic Fallback]
+    I --> J[Graph Sanitization\nnoise filtering + main node]
+    J --> K[Neo4j Aura\nUploaded-content graph store]
+    K --> L[Pyvis Interactive Visualization]
+    L --> M[Node Filter / JSON-CSV Export]
+    M --> N[Node-linked Retrieval + QA]
+
+    N --> F
 ```
 
 ## Environment Variables
