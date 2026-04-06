@@ -8,7 +8,7 @@ This project answers finance and banking questions using your curated corpus (SE
 
 Core outcomes:
 - Domain-focused Q&A with source citations
-- Hybrid retrieval quality (BM25 + vector + rerank)
+- Hybrid retrieval quality (BM25 + vector + rerank + context-aware chunking)
 - Interactive knowledge graph from uploaded user documents
 - Async QA pipeline with in-memory context-aware cache
 - RAGAS evaluation and CI gate for faithfulness
